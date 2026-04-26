@@ -1,0 +1,44 @@
+{
+  "name": "@samvallad33/pathfinder",
+  "version": "0.1.0",
+  "description": "Your AI learning partner that remembers what makes things click for you.",
+  "type": "module",
+  "bin": {
+    "pathfinder-mcp": "dist/src/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "SECURITY.md",
+    "demo"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "start": "node dist/src/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "vestige",
+    "learning",
+    "developer-tools",
+    "spaced-repetition",
+    "ai-memory"
+  ],
+  "author": "Sam Valladares",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/samvallad33/pathfinder.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
