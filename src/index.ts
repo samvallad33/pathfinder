@@ -27,7 +27,7 @@ async function handleLine(line: string): Promise<void> {
     return;
   }
 
-  if (!request.id && request.method?.startsWith("notifications/")) {
+  if (request.id === undefined && request.method?.startsWith("notifications/")) {
     return;
   }
 
@@ -64,9 +64,9 @@ async function handleLine(line: string): Promise<void> {
         return;
 
       case "tools/call": {
-        const params = asObject(request.params);
+        const params = asObject(request.params, "tools/call params");
         const name = typeof params.name === "string" ? params.name : "";
-        const args = asObject(params.arguments);
+        const args = asObject(params.arguments, "tools/call arguments", true);
         const result = await callPathfinderTool({ vestige }, name, args);
         writeJson(success(request.id, result as unknown as JsonValue));
         return;
@@ -88,8 +88,7 @@ async function handleLine(line: string): Promise<void> {
       failure(
         request.id,
         -32603,
-        error instanceof Error ? error.message : "Internal error",
-        error instanceof Error ? error.stack : undefined
+        error instanceof Error ? error.message : "Internal error"
       )
     );
   }

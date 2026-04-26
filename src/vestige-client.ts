@@ -18,7 +18,7 @@ export class VestigeClient {
   constructor(
     private readonly command = process.env.VESTIGE_MCP_COMMAND ?? "vestige-mcp",
     private readonly args = splitArgs(process.env.VESTIGE_MCP_ARGS ?? ""),
-    private readonly timeoutMs = Number(process.env.PATHFINDER_CALL_TIMEOUT_MS ?? 30_000)
+    private readonly timeoutMs = parseTimeoutMs(process.env.PATHFINDER_CALL_TIMEOUT_MS)
   ) {}
 
   async callTool(name: string, args: unknown): Promise<JsonValue> {
@@ -67,7 +67,7 @@ export class VestigeClient {
     this.child = spawn(this.command, this.args, {
       stdio: ["pipe", "pipe", "pipe"],
       env: {
-        ...process.env,
+        ...childEnv(),
         VESTIGE_DASHBOARD_ENABLED: process.env.VESTIGE_DASHBOARD_ENABLED ?? "false",
         VESTIGE_DASHBOARD_PORT: process.env.VESTIGE_DASHBOARD_PORT ?? "3937",
         VESTIGE_HTTP_PORT: process.env.VESTIGE_HTTP_PORT ?? "3938"
@@ -80,11 +80,13 @@ export class VestigeClient {
 
     this.child.on("exit", (code, signal) => {
       const message = `vestige-mcp exited${code === null ? "" : ` with code ${code}`}${signal ? ` (${signal})` : ""}`;
-      for (const pending of this.pending.values()) {
-        clearTimeout(pending.timer);
-        pending.reject(new Error(message));
-      }
-      this.pending.clear();
+      this.rejectPending(new Error(message));
+      this.child = undefined;
+      this.initialized = false;
+    });
+
+    this.child.on("error", (error) => {
+      this.rejectPending(new Error(`Failed to start ${this.command}: ${error.message}`));
       this.child = undefined;
       this.initialized = false;
     });
@@ -155,12 +157,77 @@ export class VestigeClient {
       pending.resolve(message.result ?? null);
     }
   }
+
+  private rejectPending(error: Error): void {
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+    this.pending.clear();
+  }
 }
 
 function splitArgs(value: string): string[] {
   return value.trim() ? value.trim().split(/\s+/) : [];
 }
 
-function toJsonValue(value: unknown): JsonValue {
-  return JSON.parse(JSON.stringify(value)) as JsonValue;
+function parseTimeoutMs(value: string | undefined): number {
+  if (value === undefined) return 30_000;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30_000;
+}
+
+function childEnv(): NodeJS.ProcessEnv {
+  const allowed = [
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "TMPDIR",
+    "RUST_LOG",
+    "VESTIGE_AUTH_TOKEN",
+    "ORT_DYLIB_PATH",
+    "DYLD_LIBRARY_PATH"
+  ];
+  return Object.fromEntries(
+    allowed
+      .map((key) => [key, process.env[key]])
+      .filter((entry): entry is [string, string] => typeof entry[1] === "string")
+  );
+}
+
+function toJsonValue(value: unknown, seen = new WeakSet<object>()): JsonValue {
+  if (value === null) return null;
+  if (typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new Error("JSON-RPC payload contains a non-finite number");
+    return value;
+  }
+  if (typeof value === "bigint") {
+    throw new Error("JSON-RPC payload contains a BigInt, which is not JSON serializable");
+  }
+  if (typeof value !== "object") {
+    throw new Error(`JSON-RPC payload contains unsupported value type: ${typeof value}`);
+  }
+  if (seen.has(value)) {
+    throw new Error("JSON-RPC payload contains a circular reference");
+  }
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => toJsonValue(item, seen));
+  }
+
+  if (Object.getPrototypeOf(value) !== Object.prototype) {
+    throw new Error("JSON-RPC payload contains a non-plain object");
+  }
+
+  const out: Record<string, JsonValue> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (item !== undefined) {
+      out[key] = toJsonValue(item, seen);
+    }
+  }
+  return out;
 }

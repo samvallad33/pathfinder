@@ -3,6 +3,9 @@ import { jsonTextResult } from "./protocol.js";
 import type { VestigeClient } from "./vestige-client.js";
 
 type Args = Record<string, JsonValue>;
+const MAX_SHORT_TEXT = 240;
+const MAX_MEDIUM_TEXT = 1_000;
+const MAX_LONG_TEXT = 8_000;
 
 export interface ToolDefinition {
   name: string;
@@ -22,10 +25,10 @@ export const tools: ToolDefinition[] = [
     inputSchema: {
       type: "object",
       properties: {
-        topic: { type: "string", description: "Learning area, language, library, or domain." },
-        concept: { type: "string", description: "The specific concept being learned." },
-        breakthrough: { type: "string", description: "Optional insight or explanation that helped." },
-        source: { type: "string", description: "Optional source, URL, repo, chat, or lesson." },
+        topic: { type: "string", maxLength: MAX_SHORT_TEXT, description: "Learning area, language, library, or domain." },
+        concept: { type: "string", maxLength: MAX_SHORT_TEXT, description: "The specific concept being learned." },
+        breakthrough: { type: "string", maxLength: MAX_MEDIUM_TEXT, description: "Optional insight or explanation that helped." },
+        source: { type: "string", maxLength: MAX_MEDIUM_TEXT, description: "Optional source, URL, repo, chat, or lesson." },
         difficulty: {
           type: "string",
           enum: ["easy", "medium", "hard"],
@@ -42,10 +45,10 @@ export const tools: ToolDefinition[] = [
     inputSchema: {
       type: "object",
       properties: {
-        text: { type: "string", description: "What is confusing or not yet understood." },
-        topic: { type: "string", description: "Optional topic label." },
-        why: { type: "string", description: "Optional reason this is confusing." },
-        source: { type: "string", description: "Optional source, URL, repo, chat, or lesson." }
+        text: { type: "string", maxLength: MAX_LONG_TEXT, description: "What is confusing or not yet understood." },
+        topic: { type: "string", maxLength: MAX_SHORT_TEXT, description: "Optional topic label." },
+        why: { type: "string", maxLength: MAX_MEDIUM_TEXT, description: "Optional reason this is confusing." },
+        source: { type: "string", maxLength: MAX_MEDIUM_TEXT, description: "Optional source, URL, repo, chat, or lesson." }
       },
       required: ["text"]
     }
@@ -57,10 +60,10 @@ export const tools: ToolDefinition[] = [
     inputSchema: {
       type: "object",
       properties: {
-        concept: { type: "string", description: "The concept that clicked." },
-        what_clicked: { type: "string", description: "The explanation or mental model that worked." },
-        analogy_used: { type: "string", description: "Optional named analogy, metaphor, or example." },
-        source: { type: "string", description: "Optional source, URL, repo, chat, or lesson." }
+        concept: { type: "string", maxLength: MAX_SHORT_TEXT, description: "The concept that clicked." },
+        what_clicked: { type: "string", maxLength: MAX_LONG_TEXT, description: "The explanation or mental model that worked." },
+        analogy_used: { type: "string", maxLength: MAX_SHORT_TEXT, description: "Optional named analogy, metaphor, or example." },
+        source: { type: "string", maxLength: MAX_MEDIUM_TEXT, description: "Optional source, URL, repo, chat, or lesson." }
       },
       required: ["concept", "what_clicked"]
     }
@@ -72,7 +75,7 @@ export const tools: ToolDefinition[] = [
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Concept, analogy, language, or learning problem to recall." },
+        query: { type: "string", maxLength: MAX_MEDIUM_TEXT, description: "Concept, analogy, language, or learning problem to recall." },
         limit: { type: "integer", minimum: 1, maximum: 10, default: 5 }
       },
       required: ["query"]
@@ -121,11 +124,11 @@ export async function callPathfinderTool(
 }
 
 async function recordLearning(runtime: Runtime, args: Args): Promise<JsonValue> {
-  const topic = requireString(args, "topic");
-  const concept = requireString(args, "concept");
-  const breakthrough = optionalString(args, "breakthrough");
+  const topic = requireString(args, "topic", MAX_SHORT_TEXT);
+  const concept = requireString(args, "concept", MAX_SHORT_TEXT);
+  const breakthrough = optionalString(args, "breakthrough", MAX_MEDIUM_TEXT);
   const difficulty = optionalEnum(args, "difficulty", ["easy", "medium", "hard"]);
-  const source = optionalString(args, "source");
+  const source = optionalString(args, "source", MAX_MEDIUM_TEXT);
 
   const tags = compact([
     "pathfinder",
@@ -148,8 +151,7 @@ async function recordLearning(runtime: Runtime, args: Args): Promise<JsonValue> 
     content,
     node_type: "concept",
     tags,
-    source,
-    forceCreate: true
+    source
   });
 
   return {
@@ -162,10 +164,10 @@ async function recordLearning(runtime: Runtime, args: Args): Promise<JsonValue> 
 }
 
 async function flagConfusion(runtime: Runtime, args: Args): Promise<JsonValue> {
-  const text = requireString(args, "text");
-  const topic = optionalString(args, "topic");
-  const why = optionalString(args, "why");
-  const source = optionalString(args, "source");
+  const text = requireString(args, "text", MAX_LONG_TEXT);
+  const topic = optionalString(args, "topic", MAX_SHORT_TEXT);
+  const why = optionalString(args, "why", MAX_MEDIUM_TEXT);
+  const source = optionalString(args, "source", MAX_MEDIUM_TEXT);
 
   const tags = compact([
     "pathfinder",
@@ -185,8 +187,7 @@ async function flagConfusion(runtime: Runtime, args: Args): Promise<JsonValue> {
     content,
     node_type: "note",
     tags,
-    source,
-    forceCreate: true
+    source
   });
 
   return {
@@ -199,10 +200,10 @@ async function flagConfusion(runtime: Runtime, args: Args): Promise<JsonValue> {
 }
 
 async function noteAha(runtime: Runtime, args: Args): Promise<JsonValue> {
-  const concept = requireString(args, "concept");
-  const whatClicked = requireString(args, "what_clicked");
-  const analogyUsed = optionalString(args, "analogy_used");
-  const source = optionalString(args, "source");
+  const concept = requireString(args, "concept", MAX_SHORT_TEXT);
+  const whatClicked = requireString(args, "what_clicked", MAX_LONG_TEXT);
+  const analogyUsed = optionalString(args, "analogy_used", MAX_SHORT_TEXT);
+  const source = optionalString(args, "source", MAX_MEDIUM_TEXT);
 
   const tags = compact([
     "pathfinder",
@@ -223,8 +224,7 @@ async function noteAha(runtime: Runtime, args: Args): Promise<JsonValue> {
     content,
     node_type: "concept",
     tags,
-    source,
-    forceCreate: true
+    source
   });
 
   return {
@@ -237,15 +237,16 @@ async function noteAha(runtime: Runtime, args: Args): Promise<JsonValue> {
 }
 
 async function recallAha(runtime: Runtime, args: Args): Promise<JsonValue> {
-  const query = requireString(args, "query");
+  const query = requireString(args, "query", MAX_MEDIUM_TEXT);
   const limit = optionalNumber(args, "limit") ?? 5;
   const boundedLimit = Math.max(1, Math.min(10, Math.floor(limit)));
 
   const vestige = await runtime.vestige.callTool("search", {
-    query: `pathfinder aha analogy what clicked ${query}`,
+    query,
     limit: boundedLimit,
     detail_level: "summary",
-    include_types: ["concept", "note"],
+    include_types: ["concept"],
+    context_topics: ["pathfinder", "aha", "analogy"],
     retrieval_mode: "balanced"
   });
 
@@ -272,17 +273,19 @@ async function pathfinderStatus(runtime: Runtime): Promise<JsonValue> {
   };
 }
 
-function requireString(args: Args, field: string): string {
+function requireString(args: Args, field: string, maxLength: number): string {
   const value = args[field];
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`Missing required string argument: ${field}`);
   }
-  return value.trim();
+  return validateLength(field, value.trim(), maxLength);
 }
 
-function optionalString(args: Args, field: string): string | undefined {
+function optionalString(args: Args, field: string, maxLength: number): string | undefined {
   const value = args[field];
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+  return typeof value === "string" && value.trim().length > 0
+    ? validateLength(field, value.trim(), maxLength)
+    : undefined;
 }
 
 function optionalNumber(args: Args, field: string): number | undefined {
@@ -291,12 +294,19 @@ function optionalNumber(args: Args, field: string): number | undefined {
 }
 
 function optionalEnum<T extends string>(args: Args, field: string, allowed: readonly T[]): T | undefined {
-  const value = optionalString(args, field);
+  const value = optionalString(args, field, MAX_SHORT_TEXT);
   if (value === undefined) return undefined;
   if (!allowed.includes(value as T)) {
     throw new Error(`Invalid ${field}: ${value}. Expected one of: ${allowed.join(", ")}`);
   }
   return value as T;
+}
+
+function validateLength(field: string, value: string, maxLength: number): string {
+  if (value.length > maxLength) {
+    throw new Error(`${field} exceeds maximum length of ${maxLength} characters`);
+  }
+  return value;
 }
 
 function compact(values: Array<string | undefined>): string[] {

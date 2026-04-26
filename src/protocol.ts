@@ -81,9 +81,16 @@ export function failure(
   };
 }
 
-export function asObject(value: JsonValue | undefined): Record<string, JsonValue> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+export function asObject(
+  value: JsonValue | undefined,
+  label = "value",
+  allowUndefined = false
+): Record<string, JsonValue> {
+  if (value === undefined && allowUndefined) {
     return {};
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Invalid ${label}: expected object`);
   }
   return value;
 }
